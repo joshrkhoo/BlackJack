@@ -1,103 +1,109 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { buildDeck, shuffle, draw } from "@/lib/deck";
+import { total, isBust, dealerPlay } from "@/lib/scoring";
+import type { Card, Hand } from "@/app/types";
+
+export default function Page() {
+  // fresh shuffled deck on first render
+  const initialDeck = useMemo(() => shuffle(buildDeck()), []);
+  const [deck, setDeck] = useState(initialDeck);
+  const [player, setPlayer] = useState<Hand>([]);
+  const [dealer, setDealer] = useState<Hand>([]);
+  const [phase, setPhase] = useState<"idle" | "player" | "dealer" | "done">(
+    "idle"
+  );
+  const [msg, setMsg] = useState("");
+
+  const drawOne = () => {
+    let d = deck;
+    if (d.length === 0) d = shuffle(buildDeck()); // auto-reshuffle if empty
+    const [[c], rest] = draw(d, 1);
+    setDeck(rest);
+    return c;
+  };
+
+  const deal = () => {
+    // get 2 each
+    const c1 = drawOne(),
+      c2 = drawOne(),
+      d1 = drawOne(),
+      d2 = drawOne();
+    const ph: Hand = [c1, c2];
+    const dh: Hand = [d1, d2];
+    setPlayer(ph);
+    setDealer(dh);
+    setMsg("");
+    setPhase("player");
+  };
+
+  const hit = () => {
+    const next = [...player, drawOne()];
+    setPlayer(next);
+    if (isBust(next)) {
+      setMsg("💥 Bust! Dealer wins.");
+      setPhase("done");
+    }
+  };
+
+  const stand = () => {
+    setPhase("dealer");
+    const finalDealer = dealerPlay(dealer, drawOne);
+    setDealer(finalDealer);
+
+    const p = total(player),
+      d = total(finalDealer);
+    const result =
+      d > 21 || p > d ? "You win!" : p < d ? "Dealer wins." : "Push.";
+    setMsg(result);
+    setPhase("done");
+  };
+
+  const renderHand = (h: Hand) =>
+    h.map((c, i) => (
+      <span key={i} className="inline-block px-2 py-1 border rounded mx-1">
+        {c.rank}
+        {c.suit}
+      </span>
+    ));
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="p-8 max-w-3xl mx-auto text-center space-y-6">
+      <h1 className="text-3xl font-bold">♠️ Blackjack</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <section>
+        <h2 className="font-semibold">Dealer — {total(dealer)}</h2>
+        <div className="mt-2">
+          {dealer.length ? renderHand(dealer) : <em>—</em>}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      </section>
+
+      <section>
+        <h2 className="font-semibold">Player — {total(player)}</h2>
+        <div className="mt-2">
+          {player.length ? renderHand(player) : <em>—</em>}
+        </div>
+      </section>
+
+      <div className="flex gap-3 justify-center">
+        <Button onClick={deal} disabled={phase === "player"}>
+          Bet & Deal
+        </Button>
+        <Button onClick={hit} disabled={phase !== "player"} variant="secondary">
+          Hit
+        </Button>
+        <Button
+          onClick={stand}
+          disabled={phase !== "player"}
+          variant="destructive"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          Stand
+        </Button>
+      </div>
+
+      {msg && <p className="text-lg font-semibold">{msg}</p>}
+    </main>
   );
 }
